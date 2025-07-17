@@ -1,12 +1,5 @@
 <?php
-use Magento\Framework\App\Bootstrap;
-use Magento\Framework\App\ResourceConnection;
-use Magento\Store\Model\StoreManagerInterface;
-use Magento\Theme\Model\ThemeFactory;
-
-require __DIR__ . '/app/bootstrap.php';
-
-// ANSI colors
+// ANSI colors for CLI output
 $green = "\033[32m";
 $yellow = "\033[33m";
 $blue = "\033[34m";
@@ -15,6 +8,44 @@ $magenta = "\033[35m";
 $red = "\033[31m";
 $reset = "\033[0m";
 
+// Load config.php
+$configFile = __DIR__ . '/app/etc/config.php';
+if (!file_exists($configFile)) {
+    echo "{$red}ERROR: app/etc/config.php not found!{$reset}\n";
+    exit(1);
+}
+$config = require $configFile;
+
+// Load themes from config
+$themes = isset($config['themes']) ? $config['themes'] : [];
+$themePathToInfo = [];
+foreach ($themes as $fullPath => $info) {
+    $themePathToInfo[$fullPath] = $info;
+}
+
+// Load system theme assignments from config.php if present
+$systemConfig = isset($config['system']) ? $config['system'] : [];
+
+function findThemeIdInConfig($scope, $code, $systemConfig) {
+    if ($scope === 'stores' && isset($systemConfig['stores'][$code]['design']['theme']['theme_id'])) {
+        return $systemConfig['stores'][$code]['design']['theme']['theme_id'];
+    }
+    if ($scope === 'websites' && isset($systemConfig['websites'][$code]['design']['theme']['theme_id'])) {
+        return $systemConfig['websites'][$code]['design']['theme']['theme_id'];
+    }
+    if ($scope === 'default' && isset($systemConfig['default']['design']['theme']['theme_id'])) {
+        return $systemConfig['default']['design']['theme']['theme_id'];
+    }
+    return null;
+}
+
+// Connect to DB for fallback (core_config_data)
+use Magento\Framework\App\Bootstrap;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Store\Model\StoreManagerInterface;
+
+require __DIR__ . '/app/bootstrap.php';
+
 $params = $_SERVER;
 $bootstrap = Bootstrap::create(BP, $params);
 $obj = $bootstrap->getObjectManager();
@@ -22,122 +53,81 @@ $obj = $bootstrap->getObjectManager();
 $resource = $obj->get(ResourceConnection::class);
 $connection = $resource->getConnection();
 $storeManager = $obj->get(StoreManagerInterface::class);
-$themeFactory = $obj->get(ThemeFactory::class);
 
-// Helper: resolve theme_id to theme title and code
-function getThemeTitleAndCode($themeId, $themeFactory)
-{
-    if (!$themeId) return ['(not set)', null];
-    try {
-        $theme = $themeFactory->create()->load($themeId);
-        if ($theme && $theme->getId()) {
-            $themeTitle = $theme->getThemeTitle() . " (ID: $themeId)";
-            $themePath = $theme->getFullPath(); // e.g. frontend/Vendor/Name
-            // Now resolve to app/design/frontend path and read registration.php
-            $themeCode = findThemeCodeFromRegistration($themePath);
-            if ($themeCode) {
-                return [$themeTitle, $themeCode];
-            } else {
-                return [$themeTitle, '(code not found)'];
-            }
+// Helper: get DB config value
+function getThemeIdFromDb($connection, $scope, $scopeId) {
+    $sql = "SELECT value FROM core_config_data WHERE path = 'design/theme/theme_id' AND scope = ? AND scope_id = ?";
+    $themeId = $connection->fetchOne($sql, [$scope, $scopeId]);
+    return $themeId ?: null;
+}
+
+echo "{$magenta}Magento effective themes per store view (config.php > DB fallback):{$reset}\n\n";
+
+// Build map for website/store code <-> id
+$websites = $config['scopes']['websites'];
+$stores = $config['scopes']['stores'];
+$websiteIdToCode = [];
+foreach ($websites as $code => $w) {
+    $websiteIdToCode[$w['website_id']] = $code;
+}
+$storeIdToCode = [];
+foreach ($stores as $code => $s) {
+    $storeIdToCode[$s['store_id']] = $code;
+}
+
+// Process each website and its stores
+foreach ($websites as $websiteCode => $websiteData) {
+    $websiteId = $websiteData['website_id'];
+    $websiteName = $websiteData['name'];
+    echo "{$blue}Website: {$cyan}$websiteCode{$reset} (ID: $websiteId) - {$green}$websiteName{$reset}\n";
+
+    // Find all stores for this website
+    foreach ($stores as $storeCode => $storeData) {
+        if ($storeData['website_id'] != $websiteId) continue;
+        $storeId = $storeData['store_id'];
+        $storeName = $storeData['name'];
+
+        // 1. Try config.php: store-level theme
+        $themeId = findThemeIdInConfig('stores', $storeCode, $systemConfig);
+        $themeSource = $themeId ? "{$yellow}config.php:store{$reset}" : '';
+
+        // 2. If not, config.php: website-level theme
+        if (!$themeId) {
+            $themeId = findThemeIdInConfig('websites', $websiteCode, $systemConfig);
+            $themeSource = $themeId ? "{$yellow}config.php:website{$reset}" : '';
         }
-        return ["(Unknown ID: $themeId)", null];
-    } catch (\Exception $e) {
-        return ["(Error loading theme ID: $themeId)", null];
-    }
-}
 
-// Helper: returns theme code from registration.php in app/design/frontend
-function findThemeCodeFromRegistration($themePath)
-{
-    $parts = explode('/', $themePath);
-    if (count($parts) != 3 || $parts[0] != 'frontend') {
-        return null;
-    }
-    $vendor = $parts[1];
-    $theme = $parts[2];
-    $registration = "app/design/frontend/$vendor/$theme/registration.php";
-    if (!file_exists($registration)) {
-        return null;
-    }
-    $content = file_get_contents($registration);
-    // Regex to extract theme code
-    if (preg_match('/ComponentRegistrar::THEME,\s*[\'"]([^\'"]+)[\'"]/', $content, $m)) {
-        return $m[1];
-    }
-    return null;
-}
-
-// Get all website-level theme config
-$sql = "SELECT scope, scope_id, value FROM core_config_data WHERE path = 'design/theme/theme_id'";
-$themeConfigs = $connection->fetchAll($sql);
-
-// Organize theme config for lookup
-$themeByScope = [
-    'default' => null, // default fallback
-    'websites' => [],
-    'stores' => [],
-];
-foreach ($themeConfigs as $conf) {
-    if ($conf['scope'] == 'default') {
-        $themeByScope['default'] = $conf['value'];
-    } elseif ($conf['scope'] == 'websites') {
-        $themeByScope['websites'][$conf['scope_id']] = $conf['value'];
-    } elseif ($conf['scope'] == 'stores') {
-        $themeByScope['stores'][$conf['scope_id']] = $conf['value'];
-    }
-}
-
-// Print per-website and per-store theme usage
-echo "{$magenta}Magento theme usage per website and store view:{$reset}\n\n";
-
-foreach ($storeManager->getWebsites() as $website) {
-    $websiteId = $website->getId();
-    $websiteCode = $website->getCode();
-
-    // Theme for website scope or fallback
-    $themeId = null;
-    if (isset($themeByScope['websites'][$websiteId])) {
-        $themeId = $themeByScope['websites'][$websiteId];
-    } elseif ($themeByScope['default']) {
-        $themeId = $themeByScope['default'];
-    }
-    list($themeTitle, $themeCode) = getThemeTitleAndCode($themeId, $themeFactory);
-
-    echo "{$blue}Website: {$cyan}$websiteCode{$reset} (ID: $websiteId)\n";
-    echo "  {$yellow}Theme (website scope): {$green}$themeTitle{$reset}";
-    if ($themeCode && $themeCode !== '(code not found)') {
-        echo " {$cyan}[code: {$themeCode}]{$reset}";
-    } else {
-        echo " {$red}(code not found){$reset}";
-    }
-    echo "\n";
-
-    // Now list each store view
-    foreach ($website->getStores() as $store) {
-        $storeId = $store->getId();
-        $storeCode = $store->getCode();
-        // Store-level override?
-        if (isset($themeByScope['stores'][$storeId])) {
-            $storeThemeId = $themeByScope['stores'][$storeId];
-            list($storeThemeTitle, $storeThemeCode) = getThemeTitleAndCode($storeThemeId, $themeFactory);
-            echo "    Store: {$cyan}$storeCode{$reset} (ID: $storeId) - Theme: {$green}$storeThemeTitle{$reset}";
-            if ($storeThemeCode && $storeThemeCode !== '(code not found)') {
-                echo " {$cyan}[code: {$storeThemeCode}]{$reset}";
-            } else {
-                echo " {$red}(code not found){$reset}";
-            }
-            echo "\n";
-        } else {
-            // Inherit from website or default
-            echo "    Store: {$cyan}$storeCode{$reset} (ID: $storeId) - Theme: (inherited: {$green}$themeTitle{$reset}";
-            if ($themeCode && $themeCode !== '(code not found)') {
-                echo " {$cyan}[code: {$themeCode}]{$reset}";
-            } else {
-                echo " {$red}(code not found){$reset}";
-            }
-            echo ")\n";
+        // 3. If not, config.php: default-level theme
+        if (!$themeId) {
+            $themeId = findThemeIdInConfig('default', null, $systemConfig);
+            $themeSource = $themeId ? "{$yellow}config.php:default{$reset}" : '';
         }
+
+        // 4. If still not, check DB: store
+        if (!$themeId) {
+            $themeId = getThemeIdFromDb($connection, 'stores', $storeId);
+            $themeSource = $themeId ? "{$cyan}db:store{$reset}" : '';
+        }
+
+        // 5. If not, DB: website
+        if (!$themeId) {
+            $themeId = getThemeIdFromDb($connection, 'websites', $websiteId);
+            $themeSource = $themeId ? "{$cyan}db:website{$reset}" : '';
+        }
+
+        // 6. If not, DB: default
+        if (!$themeId) {
+            $themeId = getThemeIdFromDb($connection, 'default', 0);
+            $themeSource = $themeId ? "{$cyan}db:default{$reset}" : '';
+        }
+
+        // 7. Show result (with theme info)
+        $themeInfo = isset($themePathToInfo[$themeId]) ? $themePathToInfo[$themeId] : null;
+        $themeTitle = $themeInfo && isset($themeInfo['theme_title']) ? $themeInfo['theme_title'] : "{$red}(not found in config){$reset}";
+        $themeCode = $themeInfo && isset($themeInfo['code']) ? $themeInfo['code'] : "{$red}(unknown code){$reset}";
+
+        echo "  Store: {$cyan}$storeCode{$reset} (ID: $storeId) - {$green}$storeName{$reset}\n";
+        echo "    Theme: {$green}$themeTitle{$reset} [code: {$cyan}$themeCode{$reset}] (source: $themeSource)\n";
     }
     echo "{$magenta}-------------------------------------------{$reset}\n";
 }
