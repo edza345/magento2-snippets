@@ -13,3 +13,11 @@ wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main
 php local-checkout-customer-test-config.php
 rm local-checkout-customer-test-config.php
 ```
+
+# Faster static content deploy(-j16)
+
+```
+wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main/fast-deployment.patch
+patch -p1 < fast-deployment.patch
+rm fast-deployment.patch
+```

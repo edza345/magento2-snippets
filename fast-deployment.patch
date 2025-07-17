@@ -1,0 +1,29 @@
+diff --git a/vendor/magento/module-deploy/Package/Processor/PreProcessor/Less.php b/vendor/magento/module-deploy/Package/Processor/PreProcessor/Less.php
+index dbda66c..91eae37 100644
+--- a/vendor/magento/module-deploy/Package/Processor/PreProcessor/Less.php
++++ b/vendor/magento/module-deploy/Package/Processor/PreProcessor/Less.php
+@@ -195,7 +195,9 @@ class Less implements ProcessorInterface
+             if (!isset($this->map[$filePath])) {
+                 $this->map[$filePath] = [];
+             }
+-            $this->map[$filePath][] = $resolvedMapPath;
++            if (!in_array($resolvedMapPath, $this->map[$filePath])) {
++                $this->map[$filePath][] = $resolvedMapPath;
++            }
+             $this->buildMap($resolvedMapPath, $packagePath, $contentType);
+         };
+         if ($content) {
+
+diff --git a/vendor/magento/module-deploy/Model/Filesystem.php b/vendor/magento/module-deploy/Model/Filesystem.php
+index 59a2f0f7..1b9f9702 100644
+--- a/vendor/magento/module-deploy/Model/Filesystem.php
++++ b/vendor/magento/module-deploy/Model/Filesystem.php
+@@ -187,7 +187,7 @@ class Filesystem
+         OutputInterface $output
+     ) {
+         $output->writeln('Starting deployment of static content');
+-        $cmd = $this->functionCallPath . 'setup:static-content:deploy -f '
++        $cmd = $this->functionCallPath . 'setup:static-content:deploy -f -j16 '
+             . implode(' ', $this->getUsedLocales());
+
+         /**
