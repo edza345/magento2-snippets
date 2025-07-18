@@ -38,7 +38,7 @@ Press Enter to apply
 
 ```
 wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main/unlock-admins.php
-php local-checkout-customer-test-config.php
-rm local-checkout-customer-test-config.php
+php unlock-admins.php
+rm unlock-admins.php
 ```
 
