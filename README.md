@@ -30,3 +30,15 @@ php local-checkout-customer-test-config.php
 rm local-checkout-customer-test-config.php
 ```
 
+# Unlock and set Active Admin users
+
+Navigate with arrows and use spacebar to mark admins to unlock
+
+Press Enter to apply 
+
+```
+wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main/unlock-admins.php
+php local-checkout-customer-test-config.php
+rm local-checkout-customer-test-config.php
+```
+
