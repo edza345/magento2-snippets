@@ -63,6 +63,15 @@ function getThemeIdFromDb($connection, $scope, $scopeId) {
 
 echo "{$magenta}Magento effective themes per store view (config.php > DB fallback):{$reset}\n\n";
 
+// Build themeId => themePath and themeId => info maps
+$themeIdToPath = [];
+$themeIdToInfo = [];
+$rows = $connection->fetchAll("SELECT theme_id, theme_path, theme_title, area, code FROM theme");
+foreach ($rows as $row) {
+    $themeIdToPath[$row['theme_id']] = $row['area'] . '/' . $row['theme_path'];
+    $themeIdToInfo[$row['theme_id']] = $row;
+}
+
 // Build map for website/store code <-> id
 $websites = $config['scopes']['websites'];
 $stores = $config['scopes']['stores'];
@@ -122,9 +131,20 @@ foreach ($websites as $websiteCode => $websiteData) {
         }
 
         // 7. Show result (with theme info)
-        $themeInfo = isset($themePathToInfo[$themeId]) ? $themePathToInfo[$themeId] : null;
-        $themeTitle = $themeInfo && isset($themeInfo['theme_title']) ? $themeInfo['theme_title'] : "{$red}(not found in config){$reset}";
-        $themeCode = $themeInfo && isset($themeInfo['code']) ? $themeInfo['code'] : "{$red}(unknown code){$reset}";
+        $themeInfo = null;
+        if ($themeId && isset($themeIdToPath[$themeId]) && isset($themePathToInfo[$themeIdToPath[$themeId]])) {
+            $themeInfo = $themePathToInfo[$themeIdToPath[$themeId]];
+        } elseif ($themeId && isset($themeIdToInfo[$themeId])) {
+            $themeInfo = $themeIdToInfo[$themeId];
+        }
+
+        if ($themeInfo) {
+            $themeTitle = isset($themeInfo['theme_title']) ? $themeInfo['theme_title'] : '';
+            $themeCode = isset($themeInfo['code']) ? $themeInfo['code'] : '';
+        } else {
+            $themeTitle = "{$red}(not found in DB/config){$reset}";
+            $themeCode = "{$red}(unknown code){$reset}";
+        }
 
         echo "  Store: {$cyan}$storeCode{$reset} (ID: $storeId) - {$green}$storeName{$reset}\n";
         echo "    Theme: {$green}$themeTitle{$reset} [code: {$cyan}$themeCode{$reset}] (source: $themeSource)\n";
