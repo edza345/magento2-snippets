@@ -18,9 +18,9 @@ rm fast-deployment.patch
 
 ```
 wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main/magento_shortcuts.sh
-bash add_magento_aliases.sh
+bash magento_shortcuts.sh
 source ~/.bashrc
-rm source ~/.bashrc
+rm magento_shortcuts.sh
 ```
 * alias tempEn='bin/magento dev:temp:en && bin/magento c:f'
 * alias tempDis='bin/magento dev:temp:dis && bin/magento c:f'
