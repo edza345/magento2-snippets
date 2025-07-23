@@ -14,6 +14,18 @@ patch -p1 < fast-deployment.patch
 rm fast-deployment.patch
 ```
 
+# Magento Dev comand shortcuts
+
+```
+wget https://raw.githubusercontent.com/edza345/magento2-snippets/refs/heads/main/magento_shortcuts.sh
+bash add_magento_aliases.sh
+source ~/.bashrc
+rm source ~/.bashrc
+```
+* alias tempEn='bin/magento dev:temp:en && bin/magento c:f'
+* alias tempDis='bin/magento dev:temp:dis && bin/magento c:f'
+* alias mdeploy='bin/magento maintenance:enable && bin/magento setup:upgrade && bin/magento deploy:mode:set production && bin/magento c:f && bin/magento maintenance:disable'
+
 # Get Website Themes with paths
 
 ```
