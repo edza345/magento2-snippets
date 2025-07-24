@@ -9,6 +9,8 @@ ALIASES=$(cat <<'EOF'
 alias tempEn='bin/magento dev:temp:en && bin/magento c:f'
 alias tempDis='bin/magento dev:temp:dis && bin/magento c:f'
 alias mdeploy='bin/magento maintenance:enable && bin/magento setup:upgrade && bin/magento deploy:mode:set production && bin/magento c:f && bin/magento maintenance:disable'
+alias cf='bin/magento c:f'
+alias ir='bin/magento indexer:reindex'
 EOF
 )
 
@@ -19,5 +21,5 @@ else
     echo "$ALIASES" >> "$BASHRC"
     echo "Aliases added to $BASHRC"
     echo "Run: source ~/.bashrc"
-    echo "Or open a new terminal to use: tempEn, tempDis, mdeploy"
+    echo "Or open a new terminal to use: tempEn, tempDis, mdeploy, cf, ir"
 fi

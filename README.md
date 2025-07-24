@@ -24,6 +24,8 @@ rm magento_shortcuts.sh
 ```
 * alias tempEn='bin/magento dev:temp:en && bin/magento c:f'
 * alias tempDis='bin/magento dev:temp:dis && bin/magento c:f'
+* alias cf='bin/magento c:f'
+* alias ir='bin/magento indexer:reindex'
 * alias mdeploy='bin/magento maintenance:enable && bin/magento setup:upgrade && bin/magento deploy:mode:set production && bin/magento c:f && bin/magento maintenance:disable'
 
 # Get Website Themes with paths

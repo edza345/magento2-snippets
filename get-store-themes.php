@@ -73,8 +73,31 @@ foreach ($rows as $row) {
 }
 
 // Build map for website/store code <-> id
-$websites = $config['scopes']['websites'];
-$stores = $config['scopes']['stores'];
+$websites = isset($config['scopes']['websites']) ? $config['scopes']['websites'] : [];
+$stores = isset($config['scopes']['stores']) ? $config['scopes']['stores'] : [];
+if (empty($websites)) {
+    $websites = [];
+    $rows = $connection->fetchAll("SELECT website_id, code, name FROM store_website");
+    foreach ($rows as $row) {
+        $websites[$row['code']] = [
+            'website_id' => $row['website_id'],
+            'name' => $row['name'],
+        ];
+    }
+}
+
+if (empty($stores)) {
+    $stores = [];
+    $rows = $connection->fetchAll("SELECT store_id, code, name, website_id FROM store");
+    foreach ($rows as $row) {
+        $stores[$row['code']] = [
+            'store_id' => $row['store_id'],
+            'name' => $row['name'],
+            'website_id' => $row['website_id'],
+        ];
+    }
+}
+
 $websiteIdToCode = [];
 foreach ($websites as $code => $w) {
     $websiteIdToCode[$w['website_id']] = $code;
